@@ -31,3 +31,4 @@ add_test(test_d7 d7t)
 
 add_executable(d8 d8/d8.cpp)
 
+add_executable(d9 d9/d9.cpp)
