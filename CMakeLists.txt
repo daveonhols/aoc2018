@@ -30,5 +30,5 @@ target_link_libraries(d7t ${CMAKE_THREAD_LIBS_INIT} )
 add_test(test_d7 d7t)
 
 add_executable(d8 d8/d8.cpp)
-
 add_executable(d9 d9/d9.cpp)
+add_executable(d10 d10/d10.cpp)

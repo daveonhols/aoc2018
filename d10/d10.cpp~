@@ -1,0 +1,79 @@
+#include <iostream>
+#include <algorithm>
+#include <vector>
+#include <set>
+#include <fstream>
+#include <sstream>
+
+struct position {
+  int x, y;
+  position(int x, int y) {
+    this->x = x; this->y = y;
+  }
+};
+
+class point {
+private:
+  int x,y,dx,dy=0;
+public:
+  point(int x, int y, int dx, int dy) {
+    this->x=x; this->y=y; this->dx=dx; this->dy=dy;
+  }
+  position pos() {
+    return position(x, y);    
+  }
+  void step() {
+    x += dx;
+    y += dy;
+  }
+};
+
+point parseOne(std::string line) {
+  int x, y, dx, dy = 0;
+  std::stringstream ss;
+  //ss.str(line.substr(10, 6));
+  ss.str(line.substr(10, 2));
+  ss >> x;
+  ss.clear();
+  //ss.str(line.substr(18, 6));
+  ss.str(line.substr(14, 2));
+  ss >> y;
+  ss.clear();
+  std::cout << "." << ss.str() << "." << y << "." << std::endl;
+  //ss.str(line.substr(36, 2));
+  ss.str(line.substr(28, 2));
+  ss >> dx;
+  ss.clear();
+  //ss.str(line.substr(40, 2));
+  ss.str(line.substr(32, 2));
+  ss >> dy;
+  ss.clear();
+  std::cout << x << ", " << y<< ", " << dx<< ", " << dy<< ", " << std::endl;
+  return point{x, y, dx, dy};
+}
+
+int isolated(const std::set<position> positions) {
+  return 0;
+}
+
+void p1() {
+  std::vector<point> points;
+  std::fstream input("d10/test_input.txt");
+  std::string line;
+  while (std::getline(input, line)) {
+    points.push_back(parseOne(line));
+  }
+
+  while(true) {
+    std::for_each(points.begin(), points.end(), [](point p) { p.step(); });
+    std::set<position> positions;
+    std::transform(points.begin(), points.end(), std::inserter(positions, positions.begin(), [] (point p) { p.pos(); }));
+  }
+  
+}
+
+int main() {
+  std::cout << "hello d10" << std::endl;
+  p1();
+  
+}
