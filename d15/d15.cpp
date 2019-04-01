@@ -25,6 +25,7 @@ private:
   int _hp;
 public:
   elf() : _ap(3), _hp(200) {};
+  elf(int x) : _ap(x), _hp(200) {};
   int hp() { return this->_hp; };
   int ap() { return this->_ap; };
   bool attacked(int ap) { _hp -= ap ; return _hp > 0; };
@@ -56,7 +57,7 @@ std::vector<pos> adjacent(pos p) {
 }
 
 int distance(pos p1, pos p2) {
-  return std::pow(p1.first - p2.first, 2) + std::pow(p1.second - p2.second, 2); 
+  return std::sqrt(std::pow(p1.first - p2.first, 2) + std::pow(p1.second - p2.second, 2)); 
 }
 
 template <class A, class T>
@@ -82,13 +83,26 @@ std::map<pos, T> get_targets(
 
 template<class T> // target type, elf or goblin
 std::pair<pos, T> get_best_target(std::map<pos, T> targets) {
-  std::pair<pos, T> best = *targets.begin();
-  for (std::pair<pos, T> target : targets) {
-    if (target.second.hp() < best.second.hp() || ((target.second.hp() == best.second.hp()) && (target.first < best.first))) {
-      best = target;
-    }
+  std::vector<std::pair<pos, T>> to_sort{};
+  for (std::pair<pos, T> t : targets) {
+    to_sort.push_back(t);
   }
-  return best;
+
+  std::sort(to_sort.begin(), to_sort.end(), [](auto a, auto b){ return a.second.hp() < b.second.hp(); });
+
+  int best = to_sort.begin()->second.hp();
+
+  std::map<pos, T> tie_break_sort{};
+  
+  for (std::pair<pos, T> t : to_sort) {
+    if (t.second.hp() > best) {
+      break;
+    }
+    tie_break_sort.insert(t);
+  }
+
+  return *tie_break_sort.begin();
+  
 }
 
 template <class A, class T> // attacker and target
@@ -97,7 +111,7 @@ std::optional<T> attack(A attacker, T target) {
   bool alive = target.attacked(attacker.ap());
   //  std::cout << "target hp" << target.hp() << std::endl;
   if (!alive) {
-    std::cout << " ** DEATH ** " << std::endl;
+    //std::cout << " ** DEATH ** " << std::endl;
   }
   return alive ? std::optional<T>{target} : std::optional<T>{};
 }
@@ -109,7 +123,7 @@ void do_unit_attack(
 		    std::map<pos, T>& other,
 		    std::map<pos, T>& moved_others) {
     std::pair<pos, T> target = get_best_target(targets);
-    //std::cout << "targetting (" << target.first.first << "," << target.first.second << ")" << std::endl;
+    //std::cout << " targetting (" << target.first.first << "," << target.first.second << ")";
     std::optional<T> attacked = attack(attacker.second, target.second);
     if (other.find(target.first) != other.end()) {
       other.erase(target.first);
@@ -166,10 +180,12 @@ struct route {
   pos start;
   pos end;
   int length;
+  std::vector<pos> steps;
 };
 
 class route_estimate {
 private:
+  std::vector<pos> _steps;
   pos _start;
   pos _end;
   pos _curr;
@@ -179,7 +195,7 @@ private:
 public:
   route_estimate(pos start, pos end) { _start = start; _curr = start; _end = end; _length = 0;  _estimate = distance(start, end); };
 
-  route as_route() { route r; r.start = _start; r.end = _end; r.length = _length; return r;  };
+  route as_route() { route r; r.start = _start; r.end = _end; r.length = _length; r.steps = _steps; return r;  };
   
   std::vector<pos> adjacent() { return ::adjacent(_curr); };
   pos curr() { return _curr; };
@@ -195,6 +211,7 @@ public:
     result._curr = next;
     ++result._length;
     result._estimate = distance(result._curr, result._end);
+    result._steps.push_back(next);
     return result;    
   };
 };
@@ -216,13 +233,13 @@ private:
 };
 
 template <class F, class O>
-std::vector<pos> get_next_steps(std::vector<pos> candidates, grid_t g, const occupied<F, O>& occ, std::unordered_set<pos, pos_hash> been) {
+std::vector<pos> get_next_steps(std::vector<pos> candidates, grid_t& g, const occupied<F, O>& occ, std::unordered_set<pos, pos_hash>& been) {
   std::vector<pos> result;
   std::copy_if(
 	       candidates.begin(),
 	       candidates.end(),
 	       std::back_inserter(result),
-	       [&](pos p) { return (!occ.is_occupied(p)) && (g[p] == '.') &&  (been.find(p) == been.end()); });
+	       [&](pos p) { return (been.find(p) == been.end()) && (g[p] == '.') && (!occ.is_occupied(p)); });
   return result;
 }
 
@@ -233,10 +250,11 @@ std::optional<route> measure_astar(pos start, pos end, occupied<F, O> occ, grid_
   r.start = start;
   r.end = end;
   r.length = 0;
+  
+  auto heuristic = [](route_estimate a, route_estimate b){ return a.cost() < b.cost(); };
 
-  std::function<int(route_estimate, route_estimate)> heuristic = [](route_estimate a, route_estimate b){ return a.cost() < b.cost(); };
-
-  std::deque<route_estimate> open;
+  std::deque<route_estimate> open{};
+  
   std::unordered_set<pos, pos_hash> been;
   route_estimate next = route_estimate(r.start, r.end);
   been.insert(r.start);
@@ -250,11 +268,13 @@ std::optional<route> measure_astar(pos start, pos end, occupied<F, O> occ, grid_
 	open.push_back(one_step);
       }
     }
-    std::sort(open.begin(), open.end(), heuristic);
+    /*
+    //    std::xxxxsort(open.begin(), open.end(), heuristic);
+    */
     if (open.size() == 0) {
-      //  std::cout << "A* failed (" << considered <<  std::endl;
       return std::optional<route>{};
     }
+    
     next = open.front();
     open.pop_front();
     been.insert(next.curr());
@@ -296,23 +316,37 @@ std::pair<pos, M> do_unit_move(
 			       std::map<pos, M> moved_friends,
 			       std::map<pos, O> moved_others) {
 
+  //std::cout << " from (" << moving.first.first << "," << moving.first.second << ")";
   std::multiset<pos> in_range = find_attack_pos(g, others, moved_others, friends, moved_friends);
   if (in_range.size() == 0) {
     return moving;
+  }
+  //  std::cout << std::endl << " In Range " << std::endl;
+  for (auto inr : in_range) {
+    //  std::cout << "(" << inr.first << "," << inr.second << ")" << std::endl;
   }
   
   occupied occ(friends, moved_friends, others, moved_others);
   
   std::vector<route> routes{};
   for (pos p : in_range) {
+    // std::cout << "Route :: " << std::endl;
     std::optional<route> route = measure_astar(moving.first, p, occ, g);
     if(route) {
-      //      std::cout << "Route :: (" << moving.first.first << "," << moving.first.second << ") => ("  << p.first << "," << p.second << ") [" << route->length << "]" << std::endl;
-      routes.push_back(*route); 
+      routes.push_back(*route);
+      //std::cout << "(" << (*route).end.first << "," << (*route).end.second << "). L=" << (*route).length << std::endl;
+      for (pos s : route->steps) {
+	//std::cout << "   - (" << s.first << "," << s.second << ")" << std::endl;
+      }
+      if (moving.first == std::pair{25,5} && route->end == std::pair{20,22}) {
+	//printr(g, friends, others, moved_friends, moved_others, *route);
+	//throw std::logic_error("why not ");
+      }      
     }
   }
 
   if (routes.size() == 0) {
+    //std::cout << " but going nowhere ";
     return moving;
   }
   
@@ -326,9 +360,10 @@ std::pair<pos, M> do_unit_move(
       best = candidate;
     }
   }
-
+  //std::cout << " towards (" << best.end.first << ", " << best.end.second << ")";
   pos next_step = best_first_step(best, occ, g);
-  
+  //std::cout << " via (" << next_step.first << ", " << next_step.second << ")";
+
   return {next_step, moving.second};
 }
 
@@ -342,38 +377,39 @@ std::pair<pos, M> do_unit(
 
   std::pair<pos, M> m = *move.begin();
 
-  //  std::cout << "Start (" << m.first.first << "," << m.first.second << ")" << std::endl;
+  //std::cout << "Unit (" << m.first.first << "," << m.first.second << ")" << std::endl;
   
   // check if can attack
   std::map<pos, O> can_attack = get_targets(m, other, moved_others);
   if (can_attack.size() > 0) {
-    //   std::cout << "attacking" << std::endl;
+    //std::cout << " attacking immediately ";
     do_unit_attack(m, can_attack, other, moved_others); 
   } else {
-    // std::cout << "moving" << std::endl;
+    //std::cout << " moving ";
     m = do_unit_move(g, m, move, other, moved, moved_others);
     can_attack = get_targets(m, other, moved_others);
     if (can_attack.size() > 0) {
-      //  std::cout << "attacking" << std::endl;
+      //std::cout << " then attacking ";
       do_unit_attack(m, can_attack, other, moved_others);
     }
   }
-  //std::cout << "End   (" << m.first.first << "," << m.first.second << ")" << std::endl;
+  //std::cout << ".  Fin." << std::endl;
   return m;
 }
 
-enum class move_type { unknown, elf, goblin, round, elves_won, goblins_won  };
+enum class move_type { unknown, elf, goblin, round, elves_won, goblins_won, retry  };
 
-move_type next_move(elves_t curr_elves, elves_t next_elves, goblins_t curr_goblins, goblins_t next_goblins) {
-  std::cout << "ce" << curr_elves.size() << "ne" << next_elves.size() << "cg" << curr_goblins.size() << "ng" << next_goblins.size() << std::endl;
+using state_t = std::function<move_type(elves_t, elves_t, goblins_t, goblins_t)>;
+
+move_type next_move_p1(elves_t curr_elves, elves_t next_elves, goblins_t curr_goblins, goblins_t next_goblins) {
+  if (curr_elves.size() == 0 && curr_goblins.size() == 0) {
+    return move_type::round;
+  }  
   if (curr_elves.size() + next_elves.size() == 0) {
     return move_type::goblins_won;
   }
   if (curr_goblins.size() + next_goblins.size() == 0) {
     return move_type::elves_won;
-  }
-  if (curr_elves.size() == 0 && curr_goblins.size() == 0) {
-    return move_type::round;
   }
   if (curr_elves.size() == 0) {
     return move_type::goblin;
@@ -389,48 +425,80 @@ move_type next_move(elves_t curr_elves, elves_t next_elves, goblins_t curr_gobli
   return move_type::unknown;
 }
 
-void print(grid_t g, elves_t elf, goblins_t gob) {
-  for (int i = 0; i < 35; ++i) {
-    for (int j = 0; j < 35; ++j) {
-      if(elf.find({i, j}) != elf.end()) {
-	std::cout << "E";
+
+move_type next_move_p2(elves_t curr_elves, elves_t next_elves, goblins_t curr_goblins, goblins_t next_goblins) {
+  if (curr_elves.size() + next_elves.size() < 10) {
+    std::cout << "Elves lost a life ... retrying ..." << std::endl;
+    return move_type::retry;
+  }
+  return next_move_p1(curr_elves, next_elves, curr_goblins, next_goblins);
+}
+
+
+
+template <class F, class O>
+void printr(grid_t g, F f, O o, F m_f, O m_o, route r) {
+  for (int i = 0; i < 32; ++i) {
+    for (int j = 0; j < 32; ++j) {
+      if (std::find(r.steps.begin(), r.steps.end(), std::pair(i, j)) != r.steps.end()) {
+	std::cout << "+";
 	continue;
       }
-      if(gob.find({i, j}) != gob.end()) {
-	std::cout << "G";
+      if(f.find({i, j}) != f.end()) {
+	std::cout << "F";
 	continue;
       }
+      if(m_f.find({i, j}) != m_f.end()) {
+	std::cout << "f";
+	continue;
+      }
+      if(o.find({i, j}) != o.end()) {
+	std::cout << "O";
+	continue;
+      }
+      if(m_o.find({i, j}) != m_o.end()) {
+	std::cout << "o";
+	continue;
+      }
+	    
       std::cout << g[{i,j}];
     }
     std::cout << std::endl;
   }
 }
 
+
+void print(grid_t g, elves_t elf, goblins_t gob, elves_t moved_elf, goblins_t moved_gob) {
+  printr(g, elf, gob, moved_elf, moved_gob, route{});
+}
+
 template <class T> // type of survivor (elf / goblin)
 int score_survivors(std::map<pos, T> s, std::map<pos, T> m_s) {
   int score = 0;
   for (auto survior : s) {
+    std::cout << survior.second.hp() << ", ";
     score += survior.second.hp();
   }
   for (auto moved_survivor : m_s) {
     score += moved_survivor.second.hp();
+    std::cout << moved_survivor.second.hp() << ", ";
   }
   return score;
 }
 
-void run(grid_t g, elves_t elves, goblins_t goblins) {
-  int gen = 1;
+
+bool run(grid_t g, elves_t elves, goblins_t goblins, state_t state_manager) {
+  int gen = 0;
   int game_done = false;
-  while (!game_done) {
-    std::cout << "gen" << std::endl;
-    print(g, elves, goblins);
+  while (!game_done && gen < 200) {
+    //std::cout << "gen" << std::endl;
     elves_t next_elves {};
     goblins_t next_goblins {};
     bool done_round = false;
     while (!done_round) {
-      switch (next_move(elves, next_elves, goblins, next_goblins)) {
+      //std::cout << "next ... " << std::endl;
+      switch (state_manager(elves, next_elves, goblins, next_goblins)) {
       case move_type::elf: {
-	//	std::cout << "moving elf" << std::endl;
 	std::pair<pos, elf> moved = do_unit(g, elves, goblins, next_elves, next_goblins);
 	std::map<pos, elf>::iterator done = elves.begin();
 	next_elves.insert(moved);
@@ -438,7 +506,6 @@ void run(grid_t g, elves_t elves, goblins_t goblins) {
 	break;
       }
       case move_type::goblin: {
-	//std::cout << "moving goblin" << std::endl;
 	std::pair<pos, goblin> moved = do_unit(g, goblins, elves, next_goblins, next_elves);
 	std::map<pos, goblin>::iterator done = goblins.begin();
 	next_goblins.insert(moved);
@@ -446,21 +513,22 @@ void run(grid_t g, elves_t elves, goblins_t goblins) {
 	break;
       }
       case move_type::round:
-	//std::cout << "done round" << std::endl;
 	done_round = true;
 	break;
       case move_type::elves_won:
 	std::cout << "Elves won at " << gen << " with " << score_survivors(elves, next_elves) << std::endl;
-	print(g, next_elves, goblins);
+	print(g, elves, goblins, next_elves, next_goblins);
 	game_done = true;
 	done_round = true;
 	break;
       case move_type::goblins_won:
 	game_done = true;
 	done_round = true;
-	std::cout << "Goblins won" << gen << " with " << score_survivors(goblins, next_goblins) <<  std::endl;
-	print(g, next_elves, goblins);
+	//std::cout << "Goblins won at " << gen << " with " << score_survivors(goblins, next_goblins) <<  std::endl;
+	//print(g, elves, goblins, next_elves, next_goblins);
 	break;
+      case move_type::retry:
+	return false;
       case move_type::unknown:
       default:
 	std::cout << "WTF" << std::endl;
@@ -469,11 +537,18 @@ void run(grid_t g, elves_t elves, goblins_t goblins) {
     elves = next_elves;
     goblins = next_goblins;
     ++gen;
-  }
+    }
+    return true;
 }
 
-int main() {
-  std::cout << "hello d15" << std::endl;
+
+
+  
+
+using elf_builder = std::function<elf(void)>;
+
+bool run_part(elf_builder eb, state_t t) {
+
   grid_t g{};
   elves_t elves{};
   goblins_t goblins{};
@@ -488,21 +563,59 @@ int main() {
       case '#':
       case '.':
 	g[{row, col}] = line[col];
-	break;
+	break;	
       case 'G':
+      case 'g':
 	g[{row, col}] = '.';
 	goblins.insert({{row, col}, goblin()});
 	break;
       case 'E':
+      case 'e':
 	g[{row, col}] = '.';
-	elves.insert({{row, col}, elf()});
+	elves.insert({{row, col}, eb()});
 	break;
       }
     }
     ++row;
     std::cout << line << std::endl;
   }
-
-  run(g, elves, goblins);
+  return run(g, elves, goblins, t);
   
+}
+
+
+
+void run_p1() {
+  run_part([](){ return elf();}, next_move_p1 );
+}
+
+void run_p2() {
+  std::vector<int> hp {};
+  for (int i = 3; i < 190; ++i) {
+    hp.push_back(i);
+  }
+
+  auto pred = [](int x){ return x > 102; };
+  auto p2_pred = [] (int x) {
+    std::cout << "Trying elves with HP = " << x << std::endl;
+    bool won = run_part([=](){ return elf(x); }, next_move_p2);
+    std::cout << (won ? "Elves won without loss" : "Elves suffered a loss") << std::endl;
+    return won;
+  };
+  while (hp.size() > 1) {
+    int mid = (2 == hp.size()) ? 0 : hp.size() / 2;
+    std::cout << "trying " << hp[mid];    
+    bool r = p2_pred(hp[mid]);
+    std::cout << " = " << r;
+    hp.erase(r ? hp.begin() + mid + 1 : hp.begin(), r ? hp.end() : hp.begin() + mid + 1);
+    std::cout << "new range :: " << hp[0] << ":" << hp[hp.size()-1] << std::endl;
+  }
+  std::cout << "HP == " << hp[0] << std::endl;
+  
+}
+
+
+int main() {
+  std::cout << "hello d15" << std::endl;
+  run_p2();
 }
