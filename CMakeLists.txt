@@ -37,6 +37,13 @@ add_executable(d12 d12/d12.cpp)
 add_executable(d13 d13/d13.cpp)
 add_executable(d14 d14/d14.cpp)
 add_executable(d15 d15/d15.cpp)
+add_executable(d15t d15/td15.cpp)
+target_link_libraries(d15t gtest gtest_main)
+target_link_libraries(d15t ${CMAKE_THREAD_LIBS_INIT} )
+add_test(test_d15 d15t)
+
+
+
 add_executable(d16 d16/d16.cpp)
 add_executable(d17 d17/d17.cpp)
 add_executable(d18 d18/d18.cpp)
