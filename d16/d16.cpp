@@ -8,26 +8,7 @@
 #include <algorithm>
 #include <numeric>
 
-using cpu = std::array<int, 4>;
-
-std::ostream& operator<<(std::ostream& o, cpu& c) {
-  o << "[" << c[0] << ", " << c[1] << ", " << c[2] << ", " << c[3] << "]" << std::endl;
-  return o;
-}
-
-struct ins {
-  int opcode;
-  int op1;
-  int op2;
-  int out;
-};
-
-std::ostream& operator<<(std::ostream& o, ins& ins) {
-  o << "[" << ins.opcode << ", " << ins.op1 << ", " << ins.op2 << ", " << ins.out << "]" << std::endl;
-  return o;
-}
-
-using op = std::function<cpu(ins,cpu)>;
+#include "d16.hpp"
 
 // observation
 struct obs {
@@ -42,8 +23,8 @@ obs parse_obs(std::vector<std::string> parts) {
   std::stringstream rb(parts[0].substr(9));
   std::stringstream ri(parts[1]);
   std::stringstream ra(parts[2].substr(9));
-  cpu b;
-  cpu a;
+  cpu b{0,0,0,0};
+  cpu a{0,0,0,0};
   ins i;
   rb >> b[0] >> dummy >> b[1] >> dummy >> b[2] >> dummy >> b[3];
   ri >> i.opcode >> i.op1 >> i.op2 >> i.out;
@@ -139,35 +120,8 @@ int p1(std::vector<obs> observed, std::vector<op> operations) {
 
 int main() {
   std::cout << "hello d16" << std::endl;
-
-  op addr = [](ins i, cpu c){ c[i.out] = c[i.op1] + c[i.op2]; return c;  };
-  op addi = [](ins i, cpu c){ c[i.out] = c[i.op1] + i.op2; return c;  };
   
-  op mulr = [](ins i, cpu c){ c[i.out] = c[i.op1] * c[i.op2]; return c;  };
-  op muli = [](ins i, cpu c){ c[i.out] = c[i.op1] * i.op2; return c;  };
-
-  op banr = [](ins i, cpu c){ c[i.out] = c[i.op1] & c[i.op2]; return c;  };
-  op bani = [](ins i, cpu c){ c[i.out] = c[i.op1] & i.op2; return c;  };
-
-  op borr = [](ins i, cpu c){ c[i.out] = c[i.op1] | c[i.op2]; return c;  };
-  op bori = [](ins i, cpu c){ c[i.out] = c[i.op1] | i.op2; return c;  };
-
-  op setr = [](ins i, cpu c){ c[i.out] = c[i.op1]; return c; };
-  op seti = [](ins i, cpu c){ c[i.out] = i.op1; return c; };
-
-  op gtir = [](ins i, cpu c) { c[i.out] = i.op1 > c[i.op2] ? 1 : 0; return c;  };
-  op gtri = [](ins i, cpu c) { c[i.out] = c[i.op1] > i.op2 ? 1 : 0; return c;  };
-  op gtrr = [](ins i, cpu c) { c[i.out] = c[i.op1] > c[i.op2] ? 1 : 0; return c;  };
-
-  op eqir = [](ins i, cpu c) { c[i.out] = i.op1 == c[i.op2] ? 1 : 0; return c;  };
-  op eqri = [](ins i, cpu c) { c[i.out] = c[i.op1] == i.op2 ? 1 : 0; return c;  };
-  op eqrr = [](ins i, cpu c) { c[i.out] = c[i.op1] == c[i.op2] ? 1 : 0; return c;  };
-  
-  std::vector<op> ops = { addr, addi, mulr, muli, banr, bani, borr, bori, setr, seti, gtir, gtri, gtrr, eqir, eqri, eqrr };
-
   std::cout << "P1 :: " << p1(read_p1(), ops) << std::endl;
   std::cout << "P2 :: " << p2(read_p1(), ops, read_p2()) << std::endl;
   
 }
-
-

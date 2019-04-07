@@ -42,8 +42,7 @@ target_link_libraries(d15t gtest gtest_main)
 target_link_libraries(d15t ${CMAKE_THREAD_LIBS_INIT} )
 add_test(test_d15 d15t)
 
-
-
 add_executable(d16 d16/d16.cpp)
 add_executable(d17 d17/d17.cpp)
 add_executable(d18 d18/d18.cpp)
+add_executable(d19 d19/d19.cpp)
